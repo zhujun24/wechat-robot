@@ -50,7 +50,7 @@ showQRcode().then(() => {
   console.log(`listening on port ${config.port}`);
 
   // 心跳检测
-  new CronJob('* * */1 * * *', () => {
+  new CronJob('0 0 */1 * * *', () => {
     (async () => {
       let result = await sendMsg('微信团队', '心跳检测');
       logger.info(`心跳检测成功 ${new Date()}`);
