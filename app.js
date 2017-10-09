@@ -7,7 +7,7 @@ import Pug from 'koa-pug';
 import {CronJob} from 'cron';
 import config from './config';
 import {logger} from './lib/utils';
-import {showQRcode, sendMsg, getContactList} from './controllers/index';
+import {showQRcode, sendMsg, heartBeatDetect, getContactList} from './controllers/index';
 
 const TZ = 'Asia/Shanghai';
 
@@ -24,16 +24,24 @@ new Pug({
   app
 });
 
+router.get('/', async (ctx) => {
+  ctx.body = 'Welcome to Wechat-Robot!';
+  ctx.render('index', {}, true);
+});
+
 router.get('/health', async (ctx) => {
   ctx.body = 'OK';
 });
 
-router.get('/', async (ctx) => {
+router.get('/sendMsg', async (ctx) => {
   let query = ctx.query;
   let {nickname, msg} = query;
   let result = await sendMsg(nickname, msg);
   ctx.body = result;
-  // ctx.render('index', {}, true);
+});
+
+router.get('/heartBeat', async (ctx) => {
+  ctx.body = await heartBeatDetect();
 });
 
 router.get('/contactList', async (ctx) => {
@@ -50,11 +58,10 @@ showQRcode().then(() => {
   console.log(`listening on port ${config.port}`);
 
   // 心跳检测
-  new CronJob('0 0 */1 * * *', () => {
+  new CronJob('*/25 * * * * *', () => {
     (async () => {
-      let result = await sendMsg('微信团队', '心跳检测');
-      logger.info(`心跳检测成功 ${new Date()}`);
-      logger.info(JSON.stringify(result, null, 2));
+      let result = await heartBeatDetect();
+      logger.info(`心跳检测 ${result ? '成功' : '失败'} ${new Date()}`);
     })();
   }, null, true, TZ);
 }, (err) => {

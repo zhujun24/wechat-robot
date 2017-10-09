@@ -1,3 +1,4 @@
+import process from 'process';
 import {format} from 'util';
 import _ from 'lodash';
 import generateQRcode from 'qrcode-terminal';
@@ -7,22 +8,22 @@ const URL = {
   QRcode: 'https://login.weixin.qq.com/jslogin?appid=wx782c26e4c19acffb&fun=new&lang=zh_CN&_=%s',
   QRcodeUuid: 'https://login.weixin.qq.com/cgi-bin/mmwebwx-bin/login?uuid=%s&tip=1&_=%s',
   QRcodeImg: 'https://login.weixin.qq.com/l/%s',
-  initData: 'https://wx.qq.com/cgi-bin/mmwebwx-bin/webwxinit?lang=zh_CN&pass_ticket=%s&r=%s',
-  initData2: 'https://wx2.qq.com/cgi-bin/mmwebwx-bin/webwxinit?r=%s',
-  contactData: 'https://wx.qq.com/cgi-bin/mmwebwx-bin/webwxgetcontact?r==%s',
-  contactData2: 'https://wx2.qq.com/cgi-bin/mmwebwx-bin/webwxgetcontact?lang=zh_CN&pass_ticket=%s&r=%s&seq=0&skey=%s',
-  sendMsgData: 'https://wx.qq.com/cgi-bin/mmwebwx-bin/webwxsendmsg?pass_ticket=%s',
-  sendMsgData2: 'https://wx2.qq.com/cgi-bin/mmwebwx-bin/webwxsendmsg?lang=zh_CN&pass_ticket=%s'
+  initData: 'https://%s/cgi-bin/mmwebwx-bin/webwxinit?lang=zh_CN&pass_ticket=%s&r=%s',
+  contactData: 'https://%s/cgi-bin/mmwebwx-bin/webwxgetcontact?lang=zh_CN&pass_ticket=%s&r=%s&seq=0&skey=%s',
+  sendMsgData: 'https://%s/cgi-bin/mmwebwx-bin/webwxsendmsg?lang=zh_CN&pass_ticket=%s',
+  webpush: 'https://webpush.%s/cgi-bin/mmwebwx-bin/synccheck?r=%s&skey=%s&sid=%s&uin=%s&deviceid=%s&synckey=%s&_=%s',
 };
 
 let wechatData = {
   uuid: '',
   scanedUrl: '',
+  domain: '',
   uin: '',
   sid: '',
   pass_ticket: '',
   skey: '',
   FromUserName: '',
+  SyncKey: [],
   DeviceID: `e${randomStr(2, 17)}`,
   contactList: []
 };
@@ -64,9 +65,10 @@ let showQRcode = () => {
     scanPromise = (async () => {
       let uuidHttpResponse = await httpGet(format(URL.QRcode, _.now()));
       wechatData.uuid = uuidHttpResponse.body.match(/"(.+)"/)[1];
-      await sleep(2000);
+      await sleep(1000);
       generateQRcode.generate(format(URL.QRcodeImg, wechatData.uuid));
       wechatData.scanedUrl = await checkScan(wechatData.uuid);
+      wechatData.domain = wechatData.scanedUrl.match(/https:\/\/(wx2?\.qq\.com)/)[1];
       let scanedData = await httpGet({
         url: wechatData.scanedUrl,
         followRedirect: false
@@ -83,7 +85,7 @@ let showQRcode = () => {
       wechatData.skey = scanedData.match(/skey>(.+?)<\/skey/)[1];
 
       let initDataHttpResponse = await httpPost({
-        url: format(URL.initData, wechatData.pass_ticket, _.now),
+        url: format(URL.initData, wechatData.domain, wechatData.pass_ticket, _.now),
         body: JSON.stringify({
           BaseRequest: {
             Uin: wechatData.uin,
@@ -93,42 +95,24 @@ let showQRcode = () => {
           }
         })
       });
-      let initData = JSON.parse(initDataHttpResponse.body);
-      if (initData.BaseResponse.Ret !== 0) {
-        initDataHttpResponse = await httpPost({
-          url: format(URL.initData2, _.now),
-          headers: {
-            Cookie: wechatData.cookie
-          },
-          body: JSON.stringify({
-            BaseRequest: {
-              Uin: wechatData.uin,
-              Sid: wechatData.sid,
-              Skey: wechatData.skey,
-              DeviceID: wechatData.DeviceID
-            }
-          })
-        });
+      let initData;
+      try {
         initData = JSON.parse(initDataHttpResponse.body);
+      } catch (e) {
+        logger.error(JSON.stringify(initDataHttpResponse, null, 2));
+        logger.error(JSON.stringify(e));
+        process.exit(1);
       }
       wechatData.FromUserName = initData.User.UserName;
+      wechatData.SyncKey = initData.SyncKey.List;
 
       let contactDataHttpResponse = await httpPost({
-        url: format(URL.contactData, _.now()),
+        url: format(URL.contactData, wechatData.domain, wechatData.pass_ticket, _.now(), wechatData.skey),
         headers: {
           Cookie: wechatData.cookie
         }
       });
       let contactData = JSON.parse(contactDataHttpResponse.body);
-      if (!contactData.MemberList || !contactData.MemberList.length) {
-        contactDataHttpResponse = await httpPost({
-          url: format(URL.contactData2, wechatData.pass_ticket, _.now(), wechatData.skey),
-          headers: {
-            Cookie: wechatData.cookie
-          }
-        });
-        contactData = JSON.parse(contactDataHttpResponse.body);
-      }
       wechatData.contactList = contactData.MemberList;
     })();
     scaned = true;
@@ -138,7 +122,7 @@ let showQRcode = () => {
 
 const sendMsg = async (nickname, msg) => {
   logger.info(`sendMsg with nickname ${nickname} and msg ${msg}.`);
-  nickname = nickname || '低位';
+  nickname = nickname || '微信团队';
   nickname = decodeURIComponent(nickname);
   msg = msg || 'Hello World!';
   msg = decodeURIComponent(msg);
@@ -149,7 +133,7 @@ const sendMsg = async (nickname, msg) => {
   ToUserName = ToUserName[0].UserName;
   let ClientMsgId = `${_.now()}1234`;
   let sendMsgHttpResponse = await httpPost({
-    url: format(URL.sendMsgData, wechatData.pass_ticket),
+    url: format(URL.sendMsgData, wechatData.domain, wechatData.pass_ticket),
     body: JSON.stringify({
       BaseRequest: {
         Uin: wechatData.uin,
@@ -169,31 +153,24 @@ const sendMsg = async (nickname, msg) => {
     })
   });
   sendMsgHttpResponse = JSON.parse(sendMsgHttpResponse.body);
-  if (sendMsgHttpResponse.BaseResponse.Ret !== 0) {
-    sendMsgHttpResponse = await httpPost({
-      url: format(URL.sendMsgData2, wechatData.pass_ticket),
-      body: JSON.stringify({
-        BaseRequest: {
-          Uin: wechatData.uin,
-          Sid: wechatData.sid,
-          Skey: wechatData.skey,
-          DeviceID: wechatData.DeviceID
-        },
-        Msg: {
-          Type: 1,
-          Content: msg,
-          FromUserName: wechatData.FromUserName,
-          ToUserName,
-          LocalID: ClientMsgId,
-          ClientMsgId
-        },
-        Scene: 0
-      })
-    });
-    sendMsgHttpResponse = JSON.parse(sendMsgHttpResponse.body);
-  }
-  // logger.info(JSON.stringify(sendMsgHttpResponse, null, 2));
   return sendMsgHttpResponse;
+};
+
+const heartBeatDetect = async () => {
+  let synckey = [];
+  _.map(wechatData.SyncKey, (sk) => {
+    let k = `${sk.Key}_${sk.Val}`;
+    synckey.push(k);
+  });
+  synckey = synckey.join('|');
+  let webpushData = await httpGet({
+    url: format(URL.webpush, wechatData.domain, _.now(), wechatData.skey, wechatData.sid, wechatData.uin, wechatData.DeviceID, synckey, _.now()),
+    headers: {
+      Cookie: wechatData.cookie
+    }
+  });
+  logger.info(webpushData.body);
+  return /retcode:"0"/.test(webpushData.body);
 };
 
 const getContactList = () => {
@@ -203,5 +180,6 @@ const getContactList = () => {
 export {
   showQRcode,
   sendMsg,
+  heartBeatDetect,
   getContactList
 };
