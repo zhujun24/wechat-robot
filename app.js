@@ -7,7 +7,7 @@ import Pug from 'koa-pug';
 import {CronJob} from 'cron';
 import config from './config';
 import {logger} from './lib/utils';
-import {showQRcode, sendMsg, heartBeatDetect, getContactList} from './controllers/index';
+import {getContactData, showQRcode, sendMsg, heartBeatDetect, getContactList} from './controllers/index';
 
 const TZ = 'Asia/Shanghai';
 
@@ -48,6 +48,11 @@ router.get('/contactList', async (ctx) => {
   ctx.body = getContactList();
 });
 
+router.get('/contactList/update', async (ctx) => {
+  await getContactData();
+  ctx.body = getContactList();
+});
+
 showQRcode().then(() => {
   logger.info('QRcode scan success!');
   app
@@ -58,7 +63,7 @@ showQRcode().then(() => {
   console.log(`listening on port ${config.port}`);
 
   // 心跳检测
-  new CronJob('*/25 * * * * *', () => {
+  new CronJob('*/20 * * * * *', () => {
     (async () => {
       let result = await heartBeatDetect();
       logger.info(`心跳检测 ${result ? '成功' : '失败'} ${new Date()}`);

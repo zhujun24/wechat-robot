@@ -58,7 +58,18 @@ let checkScan = async (uuid) => {
 let scaned = false;
 let scanPromise;
 
-let showQRcode = () => {
+const getContactData = async () => {
+  let contactDataHttpResponse = await httpPost({
+    url: format(URL.contactData, wechatData.domain, wechatData.pass_ticket, _.now(), wechatData.skey),
+    headers: {
+      Cookie: wechatData.cookie
+    }
+  });
+  let contactData = JSON.parse(contactDataHttpResponse.body);
+  wechatData.contactList = contactData.MemberList;
+};
+
+const showQRcode = () => {
   if (scaned) {
     return scanPromise;
   } else {
@@ -106,14 +117,7 @@ let showQRcode = () => {
       wechatData.FromUserName = initData.User.UserName;
       wechatData.SyncKey = initData.SyncKey.List;
 
-      let contactDataHttpResponse = await httpPost({
-        url: format(URL.contactData, wechatData.domain, wechatData.pass_ticket, _.now(), wechatData.skey),
-        headers: {
-          Cookie: wechatData.cookie
-        }
-      });
-      let contactData = JSON.parse(contactDataHttpResponse.body);
-      wechatData.contactList = contactData.MemberList;
+      await getContactData();
     })();
     scaned = true;
     return scanPromise;
@@ -178,6 +182,7 @@ const getContactList = () => {
 };
 
 export {
+  getContactData,
   showQRcode,
   sendMsg,
   heartBeatDetect,
