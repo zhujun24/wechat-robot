@@ -11,7 +11,7 @@ const URL = {
   initData: 'https://%s/cgi-bin/mmwebwx-bin/webwxinit?lang=zh_CN&pass_ticket=%s&r=%s',
   contactData: 'https://%s/cgi-bin/mmwebwx-bin/webwxgetcontact?lang=zh_CN&pass_ticket=%s&r=%s&seq=0&skey=%s',
   sendMsgData: 'https://%s/cgi-bin/mmwebwx-bin/webwxsendmsg?lang=zh_CN&pass_ticket=%s',
-  webpush: 'https://webpush.%s/cgi-bin/mmwebwx-bin/synccheck?r=%s&skey=%s&sid=%s&uin=%s&deviceid=%s&synckey=%s&_=%s',
+  syncCheck: 'https://webpush.%s/cgi-bin/mmwebwx-bin/synccheck?r=%s&skey=%s&sid=%s&uin=%s&deviceid=%s&synckey=%s&_=%s',
 };
 
 let wechatData = {
@@ -25,6 +25,7 @@ let wechatData = {
   FromUserName: '',
   SyncKey: [],
   DeviceID: `e${randomStr(2, 17)}`,
+  cookie: '',
   contactList: []
 };
 
@@ -116,7 +117,6 @@ const showQRcode = () => {
       }
       wechatData.FromUserName = initData.User.UserName;
       wechatData.SyncKey = initData.SyncKey.List;
-
       await getContactData();
     })();
     scaned = true;
@@ -167,15 +167,17 @@ const heartBeatDetect = async () => {
     synckey.push(k);
   });
   synckey = synckey.join('|');
-  let webpushData = await httpGet({
-    url: format(URL.webpush, wechatData.domain, _.now(), wechatData.skey, wechatData.sid, wechatData.uin, wechatData.DeviceID, synckey, _.now()),
+  let syncCheckData = await httpGet({
+    url: format(URL.syncCheck, wechatData.domain, _.now(), wechatData.skey, wechatData.sid, wechatData.uin, wechatData.DeviceID, synckey, _.now()),
     headers: {
       Cookie: wechatData.cookie
     }
   });
-  logger.info(webpushData.body);
-  return /retcode:"0"/.test(webpushData.body);
+  logger.info(syncCheckData.body);
+  return /retcode:"0"/.test(syncCheckData.body);
 };
+
+const getWechatData = () => wechatData;
 
 const getContactList = () => {
   return wechatData.contactList;
@@ -183,6 +185,7 @@ const getContactList = () => {
 
 export {
   getContactData,
+  getWechatData,
   showQRcode,
   sendMsg,
   heartBeatDetect,

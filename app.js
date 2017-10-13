@@ -7,7 +7,7 @@ import Pug from 'koa-pug';
 import {CronJob} from 'cron';
 import config from './config';
 import {logger} from './lib/utils';
-import {getContactData, showQRcode, sendMsg, heartBeatDetect, getContactList} from './controllers/index';
+import {getContactData, getWechatData, showQRcode, sendMsg, heartBeatDetect, getContactList} from './controllers/index';
 
 const TZ = 'Asia/Shanghai';
 
@@ -42,6 +42,10 @@ router.get('/sendMsg', async (ctx) => {
 
 router.get('/heartBeat', async (ctx) => {
   ctx.body = await heartBeatDetect();
+});
+
+router.get('/data', async (ctx) => {
+  ctx.body = await getWechatData();
 });
 
 router.get('/contactList', async (ctx) => {

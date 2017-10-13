@@ -48,7 +48,7 @@
     "eslint-plugin-jsx-a11y": "^2.2.3",
     "eslint-plugin-react": "^6.5.0",
     "lint-staged": "^3.4.1",
-    "pre-commit": "^1.1.2"
+    "pre-commit": "^1.2.2"
   },
   "pre-commit": [
     "lint-staged"
